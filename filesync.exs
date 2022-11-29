@@ -11,7 +11,19 @@ defmodule Fsync do
     |> Path.expand
   end
 
-  # Sync funtionality
+  # Delete any files not present in the source directory
+  defp clean_up([head | tail], path, src) do
+    if head not in src do
+      File.rm!( Path.join(path, head) )
+    end
+    clean_up(tail, path, src)
+  end
+
+  defp clean_up([], _path, _src) do
+    IO.puts("All done!")
+  end
+
+  # Main sync funtionality
   defp r_sync(src, dest, [curr | next]) do
     sub = Path.relative_to(curr, src)
     new_path = Path.join(dest, sub)
@@ -23,14 +35,14 @@ defmodule Fsync do
 
       {_, false} ->
         File.mkdir(new_path)
-        r_sync(curr, new_path, File.ls!(curr) |> Enum.map( &(Path.join(curr, &1)) ))
+        sync(curr, new_path)
 
       {false, _} ->
         File.rm_rf!(new_path)
         File.cp!(curr, new_path)
 
       _ ->
-        r_sync(curr, new_path, File.ls!(curr) |> Enum.map( &(Path.join(curr, &1)) ))
+        sync(curr, new_path)
     end
 
     r_sync(src, dest, next)
@@ -44,12 +56,14 @@ defmodule Fsync do
   end
 
   def sync(src, dest) do
-    if Enum.empty?(File.ls!(src)) do
+    files = File.ls!(src)
+    if Enum.empty?(files) do
       File.rm_rf!(dest)
       File.mkdir!(dest)
       IO.puts(["All content in '", dest, "' has been removed!"])
     else
-      r_sync(src, dest, File.ls!(src) |> Enum.map( &(Path.join(src, &1)) ))
+      r_sync(src, dest, files |> Enum.map( &(Path.join(src, &1)) ))
+      clean_up(File.ls!(dest), dest, files)
     end
   end
 end
